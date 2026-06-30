@@ -49,8 +49,8 @@ jobs:
          docker compose -f compose.yml up -d frontend
 
      - name: Migration
+       if: steps.changes.outputs.backend == 'true'
        run: |
-          cd /home/junaid/full-stack-fastapi-template
           ./migration.sh
 
      - name: Verify Downlaod
