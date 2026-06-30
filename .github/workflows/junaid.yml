@@ -1,0 +1,59 @@
+name:  Deploy Production
+
+on:
+ push:
+   branches:
+      - prod
+concurrency:
+   group: production
+   cancel-in-progress: true
+
+jobs:
+  deploy:
+   runs-on: self-hosted
+
+   steps:
+
+     - name: checkout repository
+       uses: actions/checkout@v4
+
+     - name: Detect changes
+       id: changes
+       uses: dorny/paths-filter@v3
+       with:
+         filters: |
+           backend:
+                - 'backend/**'
+           frontend:
+                - 'frontend/**'
+
+     - name: Build backend
+       if: steps.changes.outputs.backend == 'true'
+       run: |
+         docker build -t fastapi-backend:1 -f backend/Dockerfile backend
+
+     - name: Build frontend
+       if: steps.changes.outputs.frontend == 'true'
+       run: |
+          docker build -t fastapi-frontend:2 -f frontend/Dockerfile frontend
+
+     - name: restart backend
+       if: steps.changes.outputs.backend == 'true'
+       run: |
+          docker compose -f compose.yml up -d backend
+
+
+     - name: restart frontend
+       if: steps.changes.outputs.frontend == 'true'
+       run: |
+         docker compose -f compose.yml up -d frontend
+
+     - name: Migration
+       run: |
+          cd /home/junaid/full-stack-fastapi-template
+          ./migration.sh
+
+     - name: Verify Downlaod
+       run: docker ps
+
+
