@@ -1,45 +1,39 @@
-FROM python:3.10
+FROM python:3.12-slim AS builder
 
+COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 
+ENV UV_LINK_MODE=copy 
+ENV UV_NO_DEV=1 
+ENV PYTHONDONTWRITEBYTECODE=1 
 ENV PYTHONUNBUFFERED=1
 
-# Install uv
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
-COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+WORKDIR /app
 
-# Compile bytecode
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#compiling-bytecode
-ENV UV_COMPILE_BYTECODE=1
+COPY . .
 
-# uv Cache
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#caching
-ENV UV_LINK_MODE=copy
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen
 
-WORKDIR /app/
+# --------------------------------------------------
 
-# Place executables in the environment at the front of the path
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 
+ENV PYTHONUNBUFFERED=1 
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Install dependencies
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-workspace --package app
+WORKDIR /app
 
-COPY ./backend/scripts /app/backend/scripts
+RUN groupadd -g 10001 backend && useradd -u 10001 -g backend --system --create-home --shell /usr/sbin/nologin backend
 
-COPY ./backend/pyproject.toml ./backend/alembic.ini /app/backend/
+COPY --from=builder --chown=backend:backend /app /app
 
-COPY ./backend/app /app/backend/app
+USER backend
 
-# Sync the project
-# Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --package app
+EXPOSE 8000
 
-WORKDIR /app/backend/
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')" || exit 1
 
-CMD ["fastapi", "run", "--workers", "4", "app/main.py"]
+CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8000"]
+

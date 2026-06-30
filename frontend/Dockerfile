@@ -1,26 +1,31 @@
-# Stage 0, "build-stage", based on Bun, to build and compile the frontend
-FROM oven/bun:1 AS build-stage
+FROM node:22-alpine AS build 
 
 WORKDIR /app
 
-COPY package.json bun.lock /app/
+# Copy package config file from your frontend directory
+COPY frontend/package.json ./
 
-COPY frontend/package.json /app/frontend/
+# Run standard install since a lockfile doesn't exist yet
+RUN npm install
 
-WORKDIR /app/frontend
+# Copy all the rest of the frontend source code files
+COPY frontend/ . 
 
-RUN bun install
+# Compile your application
+RUN npm run build 
 
-COPY ./frontend /app/frontend
-ARG VITE_API_URL
+FROM node:22-alpine AS prod 
 
-RUN bun run build
+WORKDIR /app
 
+# Install the 'serve' utility to run your static site
+RUN npm install -g serve
 
-# Stage 1, based on Nginx, to have only the compiled app, ready for production with Nginx
-FROM nginx:1
+# Copy the compiled production dist folder from the build stage
+COPY --from=build /app/dist /app/dist
 
-COPY --from=build-stage /app/frontend/dist/ /usr/share/nginx/html
+USER node 
 
-COPY ./frontend/nginx.conf /etc/nginx/conf.d/default.conf
-COPY ./frontend/nginx-backend-not-found.conf /etc/nginx/extra-conf.d/backend-not-found.conf
+EXPOSE 3000
+
+CMD ["serve", "-s", "dist", "-l", "3000"]
