@@ -30,12 +30,12 @@ jobs:
      - name: Build backend
        if: steps.changes.outputs.backend == 'true'
        run: |
-         docker build -t fastapi-backend:1 -f backend/Dockerfile .
+         docker build --network=host -t fastapi-backend:1 -f backend/Dockerfile .
 
      - name: Build frontend
        if: steps.changes.outputs.frontend == 'true'
        run: |
-          docker build -t fastapi-frontend:2 -f frontend/Dockerfile .
+          docker build --network=host -t fastapi-frontend:2 -f frontend/Dockerfile .
 
      - name: restart backend
        if: steps.changes.outputs.backend == 'true'
