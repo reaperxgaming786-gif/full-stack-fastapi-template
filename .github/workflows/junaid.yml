@@ -51,6 +51,7 @@ jobs:
      - name: Migration
        if: steps.changes.outputs.backend == 'true'
        run: |
+          chmod +x migration.sh
           ./migration.sh
 
      - name: Verify Downlaod
